@@ -12,7 +12,6 @@ import time
 from typing import Final
 
 import redis
-from redis.exceptions import LockError
 from redis.lock import Lock
 
 NUM_THREADS: Final = 4
@@ -21,6 +20,7 @@ KEY: Final = "labE:counter"
 LOCK_KEY: Final = "labE:lock"
 EPOCH_KEY: Final = "labE:epoch"
 HOLDER_KEY: Final = "labE:current_epoch_in_state"
+EXPIRED_RELEASES_KEY: Final = "labE:expired_releases"
 
 
 def critical_section(client: redis.Redis, my_epoch: int) -> bool:
@@ -53,15 +53,15 @@ def worker(client: redis.Redis) -> None:
         finally:
             try:
                 lock.release()
-            except LockError:
-                pass
+            except redis.exceptions.LockError:  # pyright: ignore[reportAttributeAccessIssue]
+                client.incr(EXPIRED_RELEASES_KEY)
 
 
 def main() -> None:
     """Run the fencing-token demo."""
     client = redis.Redis(host="127.0.0.1", port=6379, decode_responses=True)
 
-    for key in (KEY, LOCK_KEY, EPOCH_KEY, HOLDER_KEY):
+    for key in (KEY, LOCK_KEY, EPOCH_KEY, HOLDER_KEY, EXPIRED_RELEASES_KEY):
         client.delete(key)
 
     threads = [
@@ -74,7 +74,11 @@ def main() -> None:
     for thread in threads:
         thread.join()
 
-    print(f"final counter = {client.get(KEY)}    final epoch = {client.get(EPOCH_KEY)}")
+    print(
+        f"final counter = {client.get(KEY)}    "
+        f"final epoch = {client.get(EPOCH_KEY)}    "
+        f"expired releases = {client.get(EXPIRED_RELEASES_KEY) or 0}"
+    )
 
 
 if __name__ == "__main__":
