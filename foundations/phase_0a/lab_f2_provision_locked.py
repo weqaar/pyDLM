@@ -18,7 +18,7 @@ from redis.exceptions import LockError
 from redis.lock import Lock
 
 NUM_HOSTS: Final = 50
-NUM_JOBS: Final = 200
+NUM_JOBS: Final = 100
 HOST_KEY: Final = "labF:host:{i}"
 LOCK_KEY: Final = "labF:hostlock:{i}"
 
